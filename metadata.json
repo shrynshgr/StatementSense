@@ -1,0 +1,5 @@
+{
+  "name": "StatementSense",
+  "description": "Intelligent bank statement analyzer that extracts transactions, dates, and amounts from uploaded images using Gemini AI.",
+  "requestFramePermissions": []
+}
