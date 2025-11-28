@@ -14,9 +14,9 @@ const transactionSchema: Schema = {
     valueDate: { type: Type.STRING, description: "The value date of the transaction", nullable: true },
     withdrawalAmount: { type: Type.NUMBER, description: "Amount withdrawn or debited. Use 0 if none." },
     depositAmount: { type: Type.NUMBER, description: "Amount deposited or credited. Use 0 if none." },
-    closingBalance: { type: Type.NUMBER, description: "The resulting balance after transaction." },
+    closingBalance: { type: Type.NUMBER, description: "The resulting balance after transaction.", nullable: true },
   },
-  required: ["date", "narration", "withdrawalAmount", "depositAmount", "closingBalance"],
+  required: ["date", "narration", "withdrawalAmount", "depositAmount"],
 };
 
 const responseSchema: Schema = {
@@ -50,7 +50,7 @@ export const analyzeBankStatement = async (base64Data: string, mimeType: string)
                - Example: 'UPI-3037...-9307...-OK' -> If no clear name exists, leave Name null or empty.
             3. Normalize all amounts to numbers (remove currency symbols and commas).
             4. If a field is empty (like Withdrawal Amount for a Deposit row), set it to 0.
-            5. Return ONLY the JSON array matching the schema.
+            5. Return ONLY the JSON array matching the schema. Do not include markdown formatting.
             `
           },
         ],
@@ -62,12 +62,26 @@ export const analyzeBankStatement = async (base64Data: string, mimeType: string)
       },
     });
 
-    const rawText = response.text;
+    let rawText = response.text;
     if (!rawText) {
       throw new Error("No data returned from Gemini.");
     }
 
-    const transactions: Transaction[] = JSON.parse(rawText);
+    // Sanitize the output: Remove Markdown code blocks if present
+    // e.g., ```json [ ... ] ``` becomes [ ... ]
+    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    let transactions: Transaction[];
+    try {
+      transactions = JSON.parse(rawText);
+    } catch (parseError) {
+      console.error("JSON Parse Error. Raw text received:", rawText);
+      throw new Error("Failed to parse the extracted data. The AI response was not valid JSON.");
+    }
+
+    if (!Array.isArray(transactions)) {
+      throw new Error("Invalid format: Expected a list of transactions.");
+    }
 
     // Calculate summary stats on the client side to ensure accuracy
     const summary = transactions.reduce(
@@ -95,7 +109,14 @@ export const fileToGenerativePart = (file: File): Promise<{ data: string; mimeTy
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
-      const base64String = (reader.result as string).split(',')[1];
+      const result = reader.result as string;
+      // Handle cases where result might be null
+      if (!result) {
+        reject(new Error("Failed to read file"));
+        return;
+      }
+      // robustly split the base64 string
+      const base64String = result.split(',')[1];
       resolve({
         data: base64String,
         mimeType: file.type,

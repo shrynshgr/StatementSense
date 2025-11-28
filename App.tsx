@@ -12,10 +12,12 @@ function App() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file);
     setStatus(AnalysisStatus.ANALYZING);
+    setErrorMessage(null);
     
     // Create preview
     const objectUrl = URL.createObjectURL(file);
@@ -26,8 +28,9 @@ function App() {
       const analysisResult = await analyzeBankStatement(data, mimeType);
       setResult(analysisResult);
       setStatus(AnalysisStatus.SUCCESS);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      setErrorMessage(error.message || "Unknown error occurred");
       setStatus(AnalysisStatus.ERROR);
     }
   };
@@ -36,6 +39,7 @@ function App() {
     setStatus(AnalysisStatus.IDLE);
     setResult(null);
     setSelectedFile(null);
+    setErrorMessage(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
   };
@@ -127,9 +131,14 @@ function App() {
               <FileText className="w-8 h-8 text-rose-600" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 mb-2">Analysis Failed</h3>
-            <p className="text-slate-500 mb-6">
+            <p className="text-slate-500 mb-4">
               We couldn't read the transactions from this file. Please ensure it is clear, well-lit, and contains a visible table structure.
             </p>
+            {errorMessage && (
+               <div className="bg-rose-50 text-rose-700 p-3 rounded-lg text-sm mb-6 break-words">
+                 Error details: {errorMessage}
+               </div>
+            )}
             <button
               onClick={handleReset}
               className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium"
