@@ -37,6 +37,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isDisabled }) => 
   };
 
   const validateAndPassFile = (file: File) => {
+    // Check file size (approx 4MB limit for stability with inline data)
+    const MAX_SIZE_MB = 4;
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      alert(`File is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Please upload a file smaller than ${MAX_SIZE_MB}MB to ensure analysis stability.`);
+      return;
+    }
+
     if (file.type.startsWith('image/') || file.type === 'application/pdf') {
       onFileSelect(file);
     } else {
@@ -86,7 +93,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isDisabled }) => 
 
         <div className="flex items-center space-x-2 text-xs text-slate-400 bg-slate-50 px-3 py-1 rounded-full">
           <FileText size={14} />
-          <span>Max file size: 10MB</span>
+          <span>Max file size: 4MB</span>
         </div>
       </div>
     </div>

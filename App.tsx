@@ -30,7 +30,30 @@ function App() {
       setStatus(AnalysisStatus.SUCCESS);
     } catch (error: any) {
       console.error(error);
-      setErrorMessage(error.message || "Unknown error occurred");
+      
+      let msg = error.message || "Unknown error occurred";
+      
+      // Try to clean up the error message if it's a JSON string from the API
+      if (typeof msg === 'string' && msg.includes('{')) {
+         try {
+           const match = msg.match(/({.*})/);
+           if (match) {
+             const jsonErr = JSON.parse(match[0]);
+             if (jsonErr.error && jsonErr.error.message) {
+                // Check for specific RPC errors
+                if (jsonErr.error.message.includes('Rpc failed')) {
+                   msg = "Network connection failed during analysis. The file might be too large.";
+                } else {
+                   msg = jsonErr.error.message;
+                }
+             }
+           }
+         } catch (e) {
+           // ignore parsing error
+         }
+      }
+
+      setErrorMessage(msg);
       setStatus(AnalysisStatus.ERROR);
     }
   };
@@ -132,11 +155,11 @@ function App() {
             </div>
             <h3 className="text-lg font-bold text-slate-900 mb-2">Analysis Failed</h3>
             <p className="text-slate-500 mb-4">
-              We couldn't read the transactions from this file. Please ensure it is clear, well-lit, and contains a visible table structure.
+              We couldn't read the transactions from this file.
             </p>
             {errorMessage && (
                <div className="bg-rose-50 text-rose-700 p-3 rounded-lg text-sm mb-6 break-words">
-                 Error details: {errorMessage}
+                 {errorMessage}
                </div>
             )}
             <button
