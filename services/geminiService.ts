@@ -1,140 +1,154 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Transaction, AnalysisResult } from "../types";
 
 // Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Using type assertion to handle the hybrid environment check safely
+const apiKey = (import.meta as any).env?.VITE_API_KEY || (process as any).env?.API_KEY;
 
-const transactionSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    date: { type: Type.STRING, description: "The transaction date (e.g., DD/MM/YY)" },
-    narration: { type: Type.STRING, description: "Description or details of the transaction" },
-    name: { type: Type.STRING, description: "The extracted name of the payee/payer from the narration. Format is often [Payment_type]-[Transaction_no]-[Name]-[Details]. Extract [Name]. If format differs, try to identify the entity name.", nullable: true },
-    referenceNo: { type: Type.STRING, description: "Cheque number or reference number if available", nullable: true },
-    valueDate: { type: Type.STRING, description: "The value date of the transaction", nullable: true },
-    withdrawalAmount: { type: Type.NUMBER, description: "Amount withdrawn or debited. Use 0 if none." },
-    depositAmount: { type: Type.NUMBER, description: "Amount deposited or credited. Use 0 if none." },
-    closingBalance: { type: Type.NUMBER, description: "The resulting balance after transaction.", nullable: true },
-  },
-  required: ["date", "narration", "withdrawalAmount", "depositAmount"],
-};
+if (!apiKey) {
+  console.warn("API Key might be missing. Ensure VITE_API_KEY is set.");
+}
 
-const responseSchema: Schema = {
-  type: Type.ARRAY,
-  items: transactionSchema,
-  description: "List of transactions extracted from the bank statement.",
-};
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-export const analyzeBankStatement = async (base64Data: string, mimeType: string): Promise<AnalysisResult> => {
-  const modelId = "gemini-2.5-flash";
-  let lastError: any;
-  
-  // Retry configuration
-  const MAX_RETRIES = 3;
-  const INITIAL_DELAY = 2000;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Data,
-              },
+export const analyzeBankStatement = async (base64Image: string, mimeType: string): Promise<AnalysisResult> => {
+  try {
+    const model = "gemini-2.5-flash";
+    
+    // We use a pipe-delimited text format instead of JSON to save output tokens.
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Image,
             },
-            {
-              text: `Analyze this bank statement document. Extract all transaction rows into a structured JSON format.
-              
-              Rules:
-              1. Extract the Date, Narration, Reference No (if any), Value Date, Withdrawal Amount, Deposit Amount, and Closing Balance.
-              2. Extract the 'Name' from the narration field. 
-                 - The narration often follows the format: [Payment_type]-[Transaction_no]-[Name]-[Receivers_BankDetails]. 
-                 - Example: 'NEFT DR-UBIN123456-RAJU DUBEY-NETBANK' -> Name is 'RAJU DUBEY'.
-                 - Example: 'UPI-3037...-9307...-OK' -> If no clear name exists, leave Name null or empty.
-              3. Normalize all amounts to numbers (remove currency symbols and commas).
-              4. If a field is empty (like Withdrawal Amount for a Deposit row), set it to 0.
-              5. Return ONLY the JSON array matching the schema. Do not include markdown formatting.
-              `
-            },
-          ],
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: responseSchema,
-          temperature: 0.1, // Low temperature for factual extraction
-        },
-      });
+          },
+          {
+            text: `Analyze this bank statement document and extract all transaction rows.
+            
+            OUTPUT FORMAT:
+            - Pure PIPE-DELIMITED text.
+            - One transaction per line.
+            - NO headers, NO markdown code blocks, NO intro/outro text.
+            - Ensure exactly 8 columns per line. Use "NULL" for empty fields.
+            
+            Columns:
+            Date | Narration | Name | ReferenceNo | ValueDate | WithdrawalAmount | DepositAmount | ClosingBalance
 
-      let rawText = response.text;
-      if (!rawText) {
-        throw new Error("No data returned from Gemini.");
+            RULES:
+            1. **Date**: DD/MM/YY or DD/MM/YYYY.
+            2. **Narration**: Full description. Replace any pipes (|) in text with hyphens (-).
+            3. **Name**: Extract payee/merchant name (e.g., "AMAZON", "JOHN DOE"). If unsure, use "NULL".
+            4. **ReferenceNo**: Chq/Ref No. If empty, use "NULL".
+            5. **ValueDate**: If empty, use "NULL".
+            6. **Withdrawal/Deposit/Balance**: Numbers only. Remove commas. If 0 or empty, use "0".
+            
+            IMPORTANT:
+            - If a transaction takes multiple lines of text in the PDF, merge them into ONE line.
+            - Do not output table headers.
+            - Do not output page numbers.
+            `
+          },
+        ],
+      },
+      config: {
+        temperature: 0.0,
+      },
+    });
+
+    const rawText = response.text;
+    if (!rawText) {
+      throw new Error("No data received from AI service.");
+    }
+
+    const transactions: Transaction[] = [];
+    const lines = rawText.split('\n');
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
+      
+      // Filter out code blocks and headers
+      if (trimmedLine.startsWith('```')) continue;
+      if (trimmedLine.toLowerCase().includes('date|narration')) continue;
+
+      const parts = trimmedLine.split('|').map(p => p.trim());
+      
+      // Robust Parsing: Allow 7 or 8 columns.
+      // Sometimes ValueDate or Ref is skipped by the model.
+      if (parts.length < 6) continue; // Too few columns to be a valid transaction
+
+      let dateStr, narration, name, ref, valDate, withdrawalStr, depositStr, balanceStr;
+
+      if (parts.length >= 8) {
+         [dateStr, narration, name, ref, valDate, withdrawalStr, depositStr, balanceStr] = parts;
+      } else if (parts.length === 7) {
+         // Assuming ValueDate might be missing
+         [dateStr, narration, name, ref, withdrawalStr, depositStr, balanceStr] = parts;
+         valDate = undefined;
+      } else {
+         // Fallback for 6 columns (Missing Name and Ref/ValDate)
+         [dateStr, narration, withdrawalStr, depositStr, balanceStr] = parts;
+         name = undefined;
+         ref = undefined;
       }
 
-      // Sanitize the output: Remove Markdown code blocks if present
-      rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-
-      let transactions: Transaction[];
-      try {
-        transactions = JSON.parse(rawText);
-      } catch (parseError) {
-        console.error("JSON Parse Error. Raw text received:", rawText);
-        throw new Error("Failed to parse the extracted data. The AI response was not valid JSON.");
-      }
-
-      if (!Array.isArray(transactions)) {
-        throw new Error("Invalid format: Expected a list of transactions.");
-      }
-
-      // Calculate summary stats on the client side
-      const summary = transactions.reduce(
-        (acc, curr) => ({
-          totalDeposits: acc.totalDeposits + (curr.depositAmount || 0),
-          totalWithdrawals: acc.totalWithdrawals + (curr.withdrawalAmount || 0),
-          transactionCount: acc.transactionCount + 1,
-          netMovement: 0, 
-        }),
-        { totalDeposits: 0, totalWithdrawals: 0, netMovement: 0, transactionCount: 0 }
-      );
-      summary.netMovement = summary.totalDeposits - summary.totalWithdrawals;
-
-      return {
-        transactions,
-        summary,
+      const parseAmt = (str: string | undefined) => {
+        if (!str || str === "NULL") return 0;
+        const cleaned = str.replace(/,/g, '').replace(/[^\d.-]/g, '');
+        const val = parseFloat(cleaned);
+        return isNaN(val) ? 0 : val;
       };
 
-    } catch (error: any) {
-      console.warn(`Attempt ${attempt} failed:`, error);
-      lastError = error;
+      const cleanStr = (str: string | undefined) => {
+        return (!str || str === "NULL") ? undefined : str;
+      };
 
-      // Check for specific error types that warrant a retry
-      const isNetworkError = error.message?.includes('xhr error') || error.message?.includes('Rpc failed');
-      const isServerError = error.code === 500 || error.status === 500 || error.status === 'UNKNOWN';
-      
-      if ((isNetworkError || isServerError) && attempt < MAX_RETRIES) {
-        console.log(`Retrying in ${INITIAL_DELAY * attempt}ms...`);
-        await delay(INITIAL_DELAY * attempt);
-        continue;
+      const t: Transaction = {
+        date: dateStr || '',
+        narration: narration || '',
+        name: cleanStr(name),
+        referenceNo: cleanStr(ref),
+        valueDate: cleanStr(valDate),
+        withdrawalAmount: parseAmt(withdrawalStr),
+        depositAmount: parseAmt(depositStr),
+        closingBalance: parseAmt(balanceStr) || 0
+      };
+
+      // Validity check: Needs a date and at least one amount or balance
+      if (t.date.length > 0 && (t.withdrawalAmount > 0 || t.depositAmount > 0 || t.closingBalance > 0)) {
+        transactions.push(t);
       }
-      
-      // If it's not a retryable error, or we ran out of retries, break loop
-      break;
     }
-  }
 
-  // If we get here, all retries failed
-  console.error("All analysis attempts failed:", lastError);
-  
-  // Provide a clearer error message for the specific XHR/RPC failure
-  if (lastError.message?.includes('xhr error') || lastError.message?.includes('Rpc failed')) {
-    throw new Error("Network timeout or file too large. Please try a smaller file or check your connection.");
+    if (transactions.length === 0) {
+      throw new Error("AI could not identify any valid transactions. Try cropping the header/footer or using a clearer image.");
+    }
+
+    const summary = transactions.reduce(
+      (acc, curr) => ({
+        totalDeposits: acc.totalDeposits + (curr.depositAmount || 0),
+        totalWithdrawals: acc.totalWithdrawals + (curr.withdrawalAmount || 0),
+        transactionCount: acc.transactionCount + 1,
+        netMovement: 0, 
+      }),
+      { totalDeposits: 0, totalWithdrawals: 0, netMovement: 0, transactionCount: 0 }
+    );
+    summary.netMovement = summary.totalDeposits - summary.totalWithdrawals;
+
+    return { transactions, summary };
+
+  } catch (error: any) {
+    console.error("Gemini Analysis Failed:", error);
+    // Enhance error message for common failures
+    if (error.message?.includes('400') || error.message?.includes('413')) {
+      throw new Error("File is too large or complex for the API. Please try a smaller file (fewer pages).");
+    }
+    throw error;
   }
-  
-  throw lastError;
 };
 
 export const fileToGenerativePart = (file: File): Promise<{ data: string; mimeType: string }> => {
@@ -142,10 +156,6 @@ export const fileToGenerativePart = (file: File): Promise<{ data: string; mimeTy
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
-      if (!result) {
-        reject(new Error("Failed to read file"));
-        return;
-      }
       const base64String = result.split(',')[1];
       resolve({
         data: base64String,

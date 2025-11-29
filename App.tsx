@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, RotateCcw, Loader2 } from 'lucide-react';
+import { FileText, RotateCcw, Loader2, AlertCircle } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import StatsOverview from './components/StatsOverview';
 import TransactionTable from './components/TransactionTable';
@@ -12,12 +12,12 @@ function App() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file);
     setStatus(AnalysisStatus.ANALYZING);
-    setErrorMessage(null);
+    setErrorMessage('');
     
     // Create preview
     const objectUrl = URL.createObjectURL(file);
@@ -30,30 +30,7 @@ function App() {
       setStatus(AnalysisStatus.SUCCESS);
     } catch (error: any) {
       console.error(error);
-      
-      let msg = error.message || "Unknown error occurred";
-      
-      // Try to clean up the error message if it's a JSON string from the API
-      if (typeof msg === 'string' && msg.includes('{')) {
-         try {
-           const match = msg.match(/({.*})/);
-           if (match) {
-             const jsonErr = JSON.parse(match[0]);
-             if (jsonErr.error && jsonErr.error.message) {
-                // Check for specific RPC errors
-                if (jsonErr.error.message.includes('Rpc failed')) {
-                   msg = "Network connection failed during analysis. The file might be too large.";
-                } else {
-                   msg = jsonErr.error.message;
-                }
-             }
-           }
-         } catch (e) {
-           // ignore parsing error
-         }
-      }
-
-      setErrorMessage(msg);
+      setErrorMessage(error.message || "Unknown error occurred");
       setStatus(AnalysisStatus.ERROR);
     }
   };
@@ -62,7 +39,7 @@ function App() {
     setStatus(AnalysisStatus.IDLE);
     setResult(null);
     setSelectedFile(null);
-    setErrorMessage(null);
+    setErrorMessage('');
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
   };
@@ -104,7 +81,7 @@ function App() {
               </h2>
               <p className="text-lg text-slate-600">
                 Upload a PDF or image of your bank statement to instantly extract transactions, 
-                calculate totals, and export to Excel/CSV.
+                calculate totals, and group expenses by payee.
               </p>
             </div>
             <FileUpload onFileSelect={handleFileSelect} />
@@ -118,12 +95,12 @@ function App() {
               <div className="p-4">
                 <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600 font-bold">2</div>
                 <h3 className="font-semibold mb-2">AI Extraction</h3>
-                <p className="text-sm text-slate-500">Our advanced AI reads the text, dates, and amounts accurately.</p>
+                <p className="text-sm text-slate-500">Our advanced AI reads texts, dates, names, and amounts accurately.</p>
               </div>
               <div className="p-4">
                 <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600 font-bold">3</div>
                 <h3 className="font-semibold mb-2">View & Export</h3>
-                <p className="text-sm text-slate-500">See your spending in a clean table and export to CSV.</p>
+                <p className="text-sm text-slate-500">See your spending by payee and export to CSV.</p>
               </div>
             </div>
           </div>
@@ -141,7 +118,7 @@ function App() {
             <div className="text-center max-w-md">
               <h3 className="text-xl font-semibold text-slate-900 mb-2">Analyzing your statement...</h3>
               <p className="text-slate-500">
-                Please wait while we extract transaction details. This usually takes 5-10 seconds.
+                Please wait while we extract transaction details and identify payees. This usually takes 5-10 seconds.
               </p>
             </div>
           </div>
@@ -151,17 +128,18 @@ function App() {
         {status === AnalysisStatus.ERROR && (
           <div className="max-w-md mx-auto mt-20 text-center bg-white p-8 rounded-xl shadow-sm border border-rose-100">
             <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-rose-600" />
+              <AlertCircle className="w-8 h-8 text-rose-600" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 mb-2">Analysis Failed</h3>
             <p className="text-slate-500 mb-4">
-              We couldn't read the transactions from this file.
+              We encountered an issue processing your file:
             </p>
-            {errorMessage && (
-               <div className="bg-rose-50 text-rose-700 p-3 rounded-lg text-sm mb-6 break-words">
-                 {errorMessage}
-               </div>
-            )}
+            <div className="bg-rose-50 text-rose-700 p-3 rounded-lg text-sm font-mono mb-6 break-words">
+              {errorMessage}
+            </div>
+            <p className="text-xs text-slate-400 mb-6">
+              Tip: Ensure the document is clear, has a visible table, and is not password protected. For large PDFs, try splitting them.
+            </p>
             <button
               onClick={handleReset}
               className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium"
@@ -176,14 +154,14 @@ function App() {
           <div className="animate-fade-in-up">
             <div className="flex flex-col lg:flex-row gap-8 items-start">
               
-              {/* Left Column: Stats & Table */}
-              <div className="flex-1 w-full">
+              {/* Left Column: Stats, Table, Payee Analysis */}
+              <div className="flex-1 w-full space-y-8">
                 <StatsOverview data={result} />
-                <PayeeAnalysis transactions={result.transactions} />
                 <TransactionTable transactions={result.transactions} />
+                <PayeeAnalysis transactions={result.transactions} />
               </div>
 
-              {/* Right Column: Source Image/PDF Preview (Sticky) */}
+              {/* Right Column: Source Document Preview (Sticky) */}
               <div className="lg:w-80 w-full shrink-0">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 sticky top-24">
                   <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center justify-between">
@@ -195,16 +173,11 @@ function App() {
                   <div className="relative rounded-lg overflow-hidden border border-slate-100 bg-slate-50 aspect-[3/4] group">
                     {previewUrl && (
                       selectedFile?.type === 'application/pdf' ? (
-                        <object
-                          data={previewUrl}
-                          type="application/pdf"
-                          className="w-full h-full"
-                          title="PDF Preview"
-                        >
-                          <div className="flex items-center justify-center h-full text-sm text-slate-400 p-4 text-center">
-                            PDF Preview Not Available
-                          </div>
-                        </object>
+                         <iframe 
+                           src={previewUrl} 
+                           title="Document Preview"
+                           className="w-full h-full"
+                         />
                       ) : (
                         <img 
                           src={previewUrl} 

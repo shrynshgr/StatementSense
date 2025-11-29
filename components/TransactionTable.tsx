@@ -1,6 +1,6 @@
 import React from 'react';
 import { Transaction } from '../types';
-import { Download } from 'lucide-react';
+import { ArrowDown, ArrowUp, Download } from 'lucide-react';
 
 interface TransactionTableProps {
   transactions: Transaction[];
@@ -18,7 +18,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ transactions }) => 
         `"${t.referenceNo || ''}"`,
         t.withdrawalAmount,
         t.depositAmount,
-        t.closingBalance !== undefined ? t.closingBalance : ''
+        t.closingBalance
       ].join(","))
     ].join("\n");
 
@@ -87,11 +87,7 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ transactions }) => 
                   )}
                 </td>
                 <td className="p-4 text-right font-mono font-medium text-slate-900">
-                  {t.closingBalance !== undefined && t.closingBalance !== null ? (
-                    t.closingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })
-                  ) : (
-                    <span className="text-slate-300">--</span>
-                  )}
+                  {t.closingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
               </tr>
             ))}

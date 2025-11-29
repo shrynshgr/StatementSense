@@ -6,7 +6,7 @@ export interface Transaction {
   valueDate?: string;
   withdrawalAmount: number;
   depositAmount: number;
-  closingBalance?: number;
+  closingBalance: number;
 }
 
 export interface AnalysisResult {

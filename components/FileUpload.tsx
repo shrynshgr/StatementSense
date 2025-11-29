@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Upload, FileText, AlertCircle } from 'lucide-react';
+import { Upload, FileText } from 'lucide-react';
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
@@ -37,18 +37,20 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isDisabled }) => 
   };
 
   const validateAndPassFile = (file: File) => {
-    // Check file size (approx 4MB limit for stability with inline data)
-    const MAX_SIZE_MB = 4;
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      alert(`File is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Please upload a file smaller than ${MAX_SIZE_MB}MB to ensure analysis stability.`);
+    // 1. Check File Type
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      alert("Please upload an image file (PNG, JPG, JPEG) or a PDF document.");
       return;
     }
 
-    if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-      onFileSelect(file);
-    } else {
-      alert("Please upload an image file (PNG, JPG) or PDF.");
+    // 2. Check File Size (10MB limit)
+    const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_SIZE_BYTES) {
+      alert("File is too large. Please upload a file smaller than 10MB.");
+      return;
     }
+
+    onFileSelect(file);
   };
 
   const onButtonClick = () => {
@@ -87,13 +89,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isDisabled }) => 
             Click or drag & drop to upload
           </p>
           <p className="text-sm text-slate-500">
-            Supports Images (JPG, PNG) and PDF Bank Statements
+            Supports Images (JPG, PNG) and PDF Statements
           </p>
         </div>
 
         <div className="flex items-center space-x-2 text-xs text-slate-400 bg-slate-50 px-3 py-1 rounded-full">
           <FileText size={14} />
-          <span>Max file size: 4MB</span>
+          <span>Max file size: 10MB</span>
         </div>
       </div>
     </div>
