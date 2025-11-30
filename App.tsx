@@ -30,7 +30,24 @@ function App() {
       setStatus(AnalysisStatus.SUCCESS);
     } catch (error: any) {
       console.error(error);
-      setErrorMessage(error.message || "Unknown error occurred");
+      
+      let msg = error.message || "Unknown error occurred";
+      
+      // Clean up if it's that specific JSON RPC error string
+      if (typeof msg === 'string' && msg.includes('Rpc failed')) {
+         msg = "Network Timeout: The file took too long to process. Please try a smaller file or better connection.";
+      } else if (msg.includes('{') && msg.includes('error')) {
+         try {
+             const parsed = JSON.parse(msg);
+             if (parsed.error && parsed.error.message) {
+                 msg = parsed.error.message;
+             }
+         } catch (e) {
+             // ignore JSON parse error
+         }
+      }
+
+      setErrorMessage(msg);
       setStatus(AnalysisStatus.ERROR);
     }
   };
@@ -134,7 +151,7 @@ function App() {
             <p className="text-slate-500 mb-4">
               We encountered an issue processing your file:
             </p>
-            <div className="bg-rose-50 text-rose-700 p-3 rounded-lg text-sm font-mono mb-6 break-words">
+            <div className="bg-rose-50 text-rose-700 p-3 rounded-lg text-sm font-medium mb-6 break-words">
               {errorMessage}
             </div>
             <p className="text-xs text-slate-400 mb-6">
