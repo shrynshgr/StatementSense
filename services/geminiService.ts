@@ -86,11 +86,11 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
             },
           },
           {
-            text: `Extract ALL transactions from this bank statement. Return ONLY a valid JSON object.
-            Required fields per transaction: Date, Narration (full), Reference No, Withdrawal (debit), Deposit (credit), and Balance.
+            text: `This is an HDFC Bank statement. Extract ALL transactions from this document. Return ONLY a valid JSON object.
+            Required fields per transaction: Date, Narration (full text), Reference No (if present), Withdrawal (debit amount), Deposit (credit amount), and Balance.
             
             Strictly categorize each: [Food, Shopping, Housing, Transport, Utilities, Healthcare, Entertainment, Salary, Transfer, Other].
-            Clean merchant names into a 'name' field.`
+            Clean merchant names into a concise 'name' field for better identification.`
           },
         ],
       },
@@ -133,7 +133,7 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
       data = JSON.parse(cleaned);
     } catch (e) {
       console.error("JSON Parsing Error:", e, rawText);
-      throw new Error("Data extraction failed. The document structure might be too complex for a single scan. Try a clearer screenshot.");
+      throw new Error("Data extraction failed. The statement structure might be too complex for a single scan. Try a clearer screenshot of the transactions.");
     }
 
     const transactions: Transaction[] = data.transactions || [];
@@ -199,7 +199,7 @@ export const chatWithStatement = async (question: string, context: Transaction[]
       { role: 'user', parts: [{ text: question }] }
     ],
     config: { 
-      systemInstruction: `You are a financial analyst. Based on this data:\n${dataSummary}\nAnswer concisely.`,
+      systemInstruction: `You are a financial analyst specializing in HDFC bank statements. Based on this data:\n${dataSummary}\nAnswer concisely.`,
       temperature: 0.2
     }
   });

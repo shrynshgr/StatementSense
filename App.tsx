@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { FileText, RotateCcw, AlertCircle, ShieldCheck, List, Users, Key, ExternalLink, Lock, Calendar, Info, Cpu, Zap, Mail } from 'lucide-react';
+import { FileText, RotateCcw, AlertCircle, ShieldCheck, List, Users, Key, ExternalLink, Lock, Calendar, Info, Cpu, Zap, Mail, Landmark } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import StatsOverview from './components/StatsOverview';
 import TransactionTable from './components/TransactionTable';
@@ -209,14 +209,18 @@ function App() {
                 Extract every transaction with high accuracy using local, AI-powered document reasoning.
               </p>
               
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-center space-x-3 text-blue-800 max-w-lg mx-auto mb-8 shadow-sm">
-                <div className="bg-blue-200 p-2 rounded-lg text-blue-700">
-                   <Info size={18} />
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex items-start space-x-4 text-amber-800 max-w-lg mx-auto mb-8 shadow-sm">
+                <div className="bg-amber-200 p-2.5 rounded-xl text-amber-700 shrink-0">
+                   <Landmark size={24} />
                 </div>
-                <p className="text-xs font-semibold text-left">
-                  Optimized for <span className="font-extrabold text-blue-900">Digital Bank Statements</span>. 
-                  <span className="block text-slate-500 font-medium mt-0.5">Works best with high-contrast screenshots or clear digital documents.</span>
-                </p>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-amber-900 mb-0.5">
+                    HDFC Bank Support Only
+                  </p>
+                  <p className="text-xs text-amber-700 font-medium leading-relaxed">
+                    Currently optimized specifically for <strong>HDFC Bank statements</strong>. Support for more banks will be added in future updates.
+                  </p>
+                </div>
               </div>
             </div>
             
@@ -224,9 +228,9 @@ function App() {
             
             <div className="mt-16 pt-8 border-t border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
-                { title: "Smart Extraction", desc: "Intelligent recognition of dates, narrations, and amounts." },
-                { title: "Safe & Local", desc: "Analysis results are never stored on any server." },
-                { title: "Interactive Chat", desc: "Ask specific questions about your spending after the scan." }
+                { title: "Smart Extraction", desc: "Intelligent recognition of HDFC transaction layouts and patterns." },
+                { title: "Safe & Local", desc: "Analysis results are never stored on any server. Privacy first." },
+                { title: "Interactive Chat", desc: "Ask specific questions about your HDFC spending after the scan." }
               ].map((item, i) => (
                 <div key={i} className="space-y-2">
                   <h3 className="font-bold text-slate-800 flex items-center">
@@ -365,6 +369,7 @@ function App() {
             StatementSense &bull; High Precision Financial AI &bull; {new Date().getFullYear()}
           </p>
           <div className="flex flex-col items-center space-y-2">
+            <p className="text-[11px] text-slate-500 font-medium">Currently HDFC Bank only. More banks coming soon.</p>
             <p className="text-[11px] text-slate-500 font-medium">Facing any problems or issues?</p>
             <a 
               href="mailto:shrynshgr@gmail.com" 
