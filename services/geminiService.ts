@@ -69,8 +69,9 @@ const compressImage = async (file: File): Promise<{ data: string; mimeType: stri
 
 export const analyzeBankStatement = async (base64Image: string, mimeType: string): Promise<AnalysisResult> => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("API Key is missing. Please select an API key.");
+  if (!apiKey) throw new Error("Gemini API Key is required. Please select your API key using the setup dialog.");
 
+  // Create instance right before call as per guidelines
   const ai = new GoogleGenAI({ apiKey });
   const model = "gemini-3-pro-preview";
   
@@ -172,8 +173,8 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
 
     return { transactions, summary };
   } catch (error: any) {
-    if (error.message?.includes("Rpc failed") || error.message?.includes("500")) {
-      throw new Error("The file is too heavy for the connection. Please try a screenshot of just the transaction table.");
+    if (error.message?.includes("Rpc failed") || error.message?.includes("500") || error.message?.includes("413")) {
+      throw new Error("The file is too heavy for the connection. Please try a screenshot of just the transaction table area.");
     }
     throw error;
   }
@@ -181,7 +182,7 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
 
 export const chatWithStatement = async (question: string, context: Transaction[], history: ChatMessage[]): Promise<string> => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("API Key is missing.");
+  if (!apiKey) throw new Error("API Key is required to chat.");
 
   const ai = new GoogleGenAI({ apiKey });
   const model = "gemini-3-pro-preview";

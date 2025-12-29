@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { FileText, RotateCcw, AlertCircle, ShieldCheck, List, Users, Key, ExternalLink, Lock, Calendar, Info, Cpu, Zap, Mail, Landmark } from 'lucide-react';
+import { FileText, RotateCcw, AlertCircle, ShieldCheck, List, Users, Key, ExternalLink, Lock, Calendar, Info, Cpu, Zap, Mail, Landmark, ShieldAlert } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import StatsOverview from './components/StatsOverview';
 import TransactionTable from './components/TransactionTable';
@@ -37,6 +37,7 @@ function App() {
         const selected = await window.aistudio.hasSelectedApiKey();
         setHasApiKey(selected);
       } else {
+        // Fallback for non-AI Studio environments if needed
         setHasApiKey(!!process.env.API_KEY);
       }
     };
@@ -45,8 +46,13 @@ function App() {
 
   const handleSelectKey = async () => {
     if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      setHasApiKey(true);
+      try {
+        await window.aistudio.openSelectKey();
+        // Per guidelines: Assume success after triggering the dialog to avoid race conditions
+        setHasApiKey(true);
+      } catch (err) {
+        console.error("Failed to open key selection", err);
+      }
     }
   };
 
@@ -92,9 +98,9 @@ function App() {
       console.error("App Error Handler:", error);
       const msg = error.message || "";
       
-      if (msg.includes("Requested entity was not found")) {
+      if (msg.includes("Requested entity was not found") || msg.includes("API Key")) {
         setHasApiKey(false);
-        setErrorMessage("Your API Key is invalid. Please reconnect your AI Studio key.");
+        setErrorMessage("Your API Key is missing or invalid. Please select a valid key from a paid GCP project.");
       } else {
         setErrorMessage(msg || "We encountered an error processing this document.");
       }
@@ -111,40 +117,53 @@ function App() {
     setPreviewUrl(null);
   };
 
-  if (hasApiKey === false) {
+  // Mandatory Key Selection Screen - Redesigned to be smaller/compact
+  if (hasApiKey === false || hasApiKey === null && !process.env.API_KEY) {
     return (
-      <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-6">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-300">
-          <div className="bg-blue-600 p-8 text-white text-center relative">
-            <div className="absolute top-4 right-4 opacity-20">
-              <Lock size={80} />
+      <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-6">
+        <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white text-center relative overflow-hidden">
+            <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
+            
+            <div className="w-16 h-16 bg-white/20 backdrop-blur-xl text-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl border border-white/30">
+              <Key size={32} />
             </div>
-            <div className="w-20 h-20 bg-white/20 backdrop-blur-md text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
-              <Key size={40} />
-            </div>
-            <h2 className="text-3xl font-black mb-2">Setup Required</h2>
-            <p className="text-blue-100 font-medium">Connect your Gemini API Key to start</p>
+            <h2 className="text-2xl font-black tracking-tight">StatementSense</h2>
+            <p className="text-blue-100 font-medium text-xs opacity-80 uppercase tracking-widest">Setup Required</p>
           </div>
           
-          <div className="p-8 text-center">
-            <p className="text-slate-600 mb-8 leading-relaxed">
-              StatementSense uses the <strong>Gemini 3 Pro</strong> engine to process your data privately. 
-              Paste your API key in the next step to enable high-precision analysis.
+          <div className="p-6 text-center">
+            <p className="text-slate-600 mb-6 leading-relaxed text-sm">
+              Use your own Gemini API Key for private analysis. No data is stored or shared.
             </p>
             
             <div className="space-y-4">
               <button
                 onClick={handleSelectKey}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-xl shadow-blue-200 flex items-center justify-center space-x-3 group"
+                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-base transition-all shadow-lg shadow-blue-100 flex items-center justify-center space-x-3 group active:scale-[0.98]"
               >
                 <span>Select API Key</span>
                 <Key size={18} className="group-hover:rotate-12 transition-transform" />
               </button>
+              
+              <div className="pt-4 border-t border-slate-100">
+                <a 
+                  href="https://ai.google.dev/gemini-api/docs/billing" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center space-x-1.5 text-xs font-bold text-blue-600 hover:text-indigo-700 transition-colors py-2"
+                >
+                  <Landmark size={14} />
+                  <span>Setup Billing Guide</span>
+                  <ExternalLink size={12} />
+                </a>
+              </div>
             </div>
           </div>
           
-          <div className="bg-slate-50 p-4 text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">
-            Data is processed locally in your session
+          <div className="bg-slate-50 p-4 flex items-center justify-center space-x-2 text-slate-400 border-t border-slate-100">
+            <ShieldAlert size={12} />
+            <span className="text-[10px] font-black uppercase tracking-[0.15em]">Privacy First Engine</span>
           </div>
         </div>
       </div>
@@ -170,6 +189,13 @@ function App() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
+            <button
+              onClick={handleSelectKey}
+              className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-bold text-slate-600 transition-colors border border-slate-200"
+            >
+              <Key size={12} />
+              <span>CHANGE KEY</span>
+            </button>
             {status !== AnalysisStatus.IDLE && (
               <button
                 onClick={handleReset}
@@ -179,7 +205,7 @@ function App() {
                 <span className="hidden sm:inline">Reset</span>
               </button>
             )}
-            <div className="flex items-center space-x-2 px-3 py-1.5 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500">
+            <div className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 rounded-full text-[10px] font-bold text-blue-600 border border-blue-100">
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
               <span>PRO 3.0 ENGINE</span>
             </div>
