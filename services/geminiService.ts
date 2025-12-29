@@ -6,9 +6,7 @@ import { Transaction, AnalysisResult, ChatMessage } from "../types";
  * Strips potential markdown code blocks and whitespace from the AI response.
  */
 const cleanJsonResponse = (text: string): string => {
-  // Remove markdown code blocks like ```json ... ``` or just ``` ... ```
   let cleaned = text.replace(/```json/g, '').replace(/```/g, '');
-  // Extract anything between the first { and the last }
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
   if (firstBrace !== -1 && lastBrace !== -1) {
@@ -71,7 +69,6 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
   const apiKey = process.env.API_KEY;
   if (!apiKey) throw new Error("Gemini API Key is required. Please select your API key using the setup dialog.");
 
-  // Create instance right before call as per guidelines
   const ai = new GoogleGenAI({ apiKey });
   const model = "gemini-3-pro-preview";
   
@@ -134,11 +131,11 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
       data = JSON.parse(cleaned);
     } catch (e) {
       console.error("JSON Parsing Error:", e, rawText);
-      throw new Error("Data extraction failed. The statement structure might be too complex for a single scan. Try a clearer screenshot of the transactions.");
+      throw new Error("Data extraction failed. The statement structure might be too complex for a single scan. Try a clearer screenshot.");
     }
 
     const transactions: Transaction[] = data.transactions || [];
-    if (transactions.length === 0) throw new Error("No transactions found. Ensure dates and amounts are clearly visible.");
+    if (transactions.length === 0) throw new Error("No transactions found.");
 
     const categoryTotals: Record<string, number> = {};
     transactions.forEach(t => {
@@ -174,7 +171,7 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
     return { transactions, summary };
   } catch (error: any) {
     if (error.message?.includes("Rpc failed") || error.message?.includes("500") || error.message?.includes("413")) {
-      throw new Error("The file is too heavy for the connection. Please try a screenshot of just the transaction table area.");
+      throw new Error("The file is too heavy. Please try a screenshot of just the transaction table area.");
     }
     throw error;
   }

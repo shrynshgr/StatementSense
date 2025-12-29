@@ -10,17 +10,6 @@ import ChatPanel from './components/ChatPanel';
 import { analyzeBankStatement, fileToGenerativePart } from './services/geminiService';
 import { AnalysisResult, AnalysisStatus } from './types';
 
-// Extend window type for AI Studio methods
-declare global {
-  interface AIStudio {
-    hasSelectedApiKey: () => Promise<boolean>;
-    openSelectKey: () => Promise<void>;
-  }
-  interface Window {
-    aistudio?: AIStudio;
-  }
-}
-
 function App() {
   const [status, setStatus] = useState<AnalysisStatus>(AnalysisStatus.IDLE);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -37,7 +26,6 @@ function App() {
         const selected = await window.aistudio.hasSelectedApiKey();
         setHasApiKey(selected);
       } else {
-        // Fallback for non-AI Studio environments if needed
         setHasApiKey(!!process.env.API_KEY);
       }
     };
@@ -48,7 +36,6 @@ function App() {
     if (window.aistudio) {
       try {
         await window.aistudio.openSelectKey();
-        // Per guidelines: Assume success after triggering the dialog to avoid race conditions
         setHasApiKey(true);
       } catch (err) {
         console.error("Failed to open key selection", err);
@@ -86,10 +73,7 @@ function App() {
     setPreviewUrl(objectUrl);
 
     try {
-      setLoadingMessage("Optimizing file...");
       const { data, mimeType } = await fileToGenerativePart(file);
-      
-      setLoadingMessage("Analyzing with Gemini 3 Pro...");
       const analysisResult = await analyzeBankStatement(data, mimeType);
       
       setResult(analysisResult);
@@ -117,14 +101,13 @@ function App() {
     setPreviewUrl(null);
   };
 
-  // Mandatory Key Selection Screen - Redesigned to be smaller/compact
-  if (hasApiKey === false || hasApiKey === null && !process.env.API_KEY) {
+  // Mandatory Key Selection Screen - Compact Version
+  if (hasApiKey === false || (hasApiKey === null && !process.env.API_KEY)) {
     return (
       <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-6">
         <div className="bg-white rounded-[2rem] shadow-2xl max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-300">
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white text-center relative overflow-hidden">
             <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
-            
             <div className="w-16 h-16 bg-white/20 backdrop-blur-xl text-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl border border-white/30">
               <Key size={32} />
             </div>
@@ -136,7 +119,6 @@ function App() {
             <p className="text-slate-600 mb-6 leading-relaxed text-sm">
               Use your own Gemini API Key for private analysis. No data is stored or shared.
             </p>
-            
             <div className="space-y-4">
               <button
                 onClick={handleSelectKey}
@@ -145,7 +127,6 @@ function App() {
                 <span>Select API Key</span>
                 <Key size={18} className="group-hover:rotate-12 transition-transform" />
               </button>
-              
               <div className="pt-4 border-t border-slate-100">
                 <a 
                   href="https://ai.google.dev/gemini-api/docs/billing" 
@@ -160,7 +141,6 @@ function App() {
               </div>
             </div>
           </div>
-          
           <div className="bg-slate-50 p-4 flex items-center justify-center space-x-2 text-slate-400 border-t border-slate-100">
             <ShieldAlert size={12} />
             <span className="text-[10px] font-black uppercase tracking-[0.15em]">Privacy First Engine</span>
@@ -214,7 +194,6 @@ function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        
         {status === AnalysisStatus.IDLE && (
           <div className="max-w-3xl mx-auto mt-12 animate-in fade-in zoom-in duration-500">
             <div className="text-center mb-12">
@@ -383,7 +362,6 @@ function App() {
                 )}
               </div>
             </div>
-
             <ChatPanel transactions={result.transactions} />
           </div>
         )}
