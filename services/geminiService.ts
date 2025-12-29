@@ -65,9 +65,9 @@ const compressImage = async (file: File): Promise<{ data: string; mimeType: stri
   });
 };
 
-export const analyzeBankStatement = async (base64Image: string, mimeType: string): Promise<AnalysisResult> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("Gemini API Key is required. Please select your API key using the setup dialog.");
+export const analyzeBankStatement = async (base64Image: string, mimeType: string, customApiKey?: string): Promise<AnalysisResult> => {
+  const apiKey = customApiKey || process.env.API_KEY;
+  if (!apiKey) throw new Error("Gemini API Key is required. Please set your key to continue.");
 
   const ai = new GoogleGenAI({ apiKey });
   const model = "gemini-3-pro-preview";
@@ -178,7 +178,7 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
 };
 
 export const chatWithStatement = async (question: string, context: Transaction[], history: ChatMessage[]): Promise<string> => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
   if (!apiKey) throw new Error("API Key is required to chat.");
 
   const ai = new GoogleGenAI({ apiKey });
