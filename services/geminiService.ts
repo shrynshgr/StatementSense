@@ -70,7 +70,8 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
   if (!apiKey) throw new Error("Gemini API Key is required. Please set your key to continue.");
 
   const ai = new GoogleGenAI({ apiKey });
-  const model = "gemini-3-pro-preview";
+  // Switching to Flash for better quota limits on image-heavy tasks
+  const model = "gemini-3-flash-preview";
   
   try {
     const response = await ai.models.generateContent({
@@ -94,7 +95,6 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
       },
       config: { 
         temperature: 0,
-        thinkingConfig: { thinkingBudget: 2048 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -170,6 +170,9 @@ export const analyzeBankStatement = async (base64Image: string, mimeType: string
 
     return { transactions, summary };
   } catch (error: any) {
+    if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) {
+      throw new Error("QUOTA_EXCEEDED: Your Gemini API key has reached its rate limit. Please wait 60 seconds or switch to a paid tier in Google AI Studio.");
+    }
     if (error.message?.includes("Rpc failed") || error.message?.includes("500") || error.message?.includes("413")) {
       throw new Error("The file is too heavy. Please try a screenshot of just the transaction table area.");
     }
@@ -182,7 +185,7 @@ export const chatWithStatement = async (question: string, context: Transaction[]
   if (!apiKey) throw new Error("API Key is required to chat.");
 
   const ai = new GoogleGenAI({ apiKey });
-  const model = "gemini-3-pro-preview";
+  const model = "gemini-3-flash-preview";
   const dataSummary = JSON.stringify(context.slice(0, 40).map(t => ({
     d: t.date,
     n: t.name || t.narration.slice(0, 20),
@@ -190,19 +193,26 @@ export const chatWithStatement = async (question: string, context: Transaction[]
     dep: t.depositAmount
   })));
 
-  const response = await ai.models.generateContent({
-    model: model,
-    contents: [
-      ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
-      { role: 'user', parts: [{ text: question }] }
-    ],
-    config: { 
-      systemInstruction: `You are a financial analyst specializing in HDFC bank statements. Based on this data:\n${dataSummary}\nAnswer concisely.`,
-      temperature: 0.2
-    }
-  });
+  try {
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: [
+        ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
+        { role: 'user', parts: [{ text: question }] }
+      ],
+      config: { 
+        systemInstruction: `You are a financial analyst specializing in HDFC bank statements. Based on this data:\n${dataSummary}\nAnswer concisely.`,
+        temperature: 0.2
+      }
+    });
 
-  return response.text || "I couldn't process that question.";
+    return response.text || "I couldn't process that question.";
+  } catch (error: any) {
+    if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) {
+      return "Rate limit exceeded. Please wait a moment before asking another question.";
+    }
+    throw error;
+  }
 };
 
 export const fileToGenerativePart = async (file: File): Promise<{ data: string; mimeType: string }> => {

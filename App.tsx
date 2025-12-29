@@ -42,7 +42,7 @@ function App() {
   };
 
   const loadingMessages = [
-    "Gemini 3 Pro is scanning entries...",
+    "Gemini 3 Flash is scanning entries...",
     "Decoding transaction narrations...",
     "Categorizing spending patterns...",
     "Reconciling balances and amounts...",
@@ -72,7 +72,6 @@ function App() {
 
     try {
       const { data, mimeType } = await fileToGenerativePart(file);
-      // Pass the key specifically (local or env)
       const effectiveKey = apiKey || process.env.API_KEY || '';
       const analysisResult = await analyzeBankStatement(data, mimeType, effectiveKey);
       
@@ -82,7 +81,9 @@ function App() {
       console.error("Analysis Error:", error);
       const msg = error.message || "";
       
-      if (msg.includes("API_KEY_INVALID") || msg.includes("API key not valid") || msg.includes("401") || msg.includes("403")) {
+      if (msg.includes("QUOTA_EXCEEDED")) {
+        setErrorMessage("Rate limit reached. Your Gemini API key (Free Tier) has a limit on how many tokens it can process per minute. Please wait 60 seconds and try again.");
+      } else if (msg.includes("API_KEY_INVALID") || msg.includes("API key not valid") || msg.includes("401") || msg.includes("403")) {
         setShowKeyOverlay(true);
         setErrorMessage("Your API Key is invalid or expired. Please update it to continue.");
       } else {
@@ -101,7 +102,6 @@ function App() {
     setPreviewUrl(null);
   };
 
-  // API Key Setup Overlay
   if (showKeyOverlay) {
     return (
       <div className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-6 overflow-hidden">
@@ -216,7 +216,7 @@ function App() {
             <div className="text-center mb-12 space-y-6">
               <div className="inline-flex items-center px-4 py-1.5 bg-blue-50 text-blue-700 text-[11px] font-black rounded-full uppercase tracking-[0.2em] border border-blue-100 shadow-sm">
                 <Cpu size={14} className="mr-2" />
-                Gemini 3 Pro Precision Analysis
+                Gemini 3 Flash High-Performance Engine
               </div>
               <h2 className="text-5xl md:text-7xl font-black text-slate-900 tracking-tight leading-[1.1]">
                 Master Your Finances <br/>
@@ -295,9 +295,9 @@ function App() {
             <div className="mb-10 p-5 bg-slate-50 rounded-2xl border border-slate-100 text-left">
               <div className="flex items-center space-x-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest mb-3">
                 <Info size={12} />
-                <span>Support Contact</span>
+                <span>Troubleshooting</span>
               </div>
-              <p className="text-sm text-slate-600 font-medium mb-3">If you continue to face issues with your HDFC statement, reach out to us:</p>
+              <p className="text-sm text-slate-600 font-medium mb-3">If you see rate limit errors, your API key is on a free plan. Wait 60s or upgrade in AI Studio.</p>
               <a 
                 href="mailto:shrynshgr@gmail.com" 
                 className="flex items-center space-x-3 text-blue-600 hover:text-blue-700 font-bold text-base transition-colors group"
@@ -305,7 +305,7 @@ function App() {
                 <div className="p-2 bg-blue-100 rounded-lg group-hover:scale-110 transition-transform">
                   <Mail size={16} />
                 </div>
-                <span>shrynshgr@gmail.com</span>
+                <span>Support: shrynshgr@gmail.com</span>
               </a>
             </div>
 
@@ -413,7 +413,7 @@ function App() {
              <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.2em]">
                &copy; {new Date().getFullYear()} StatementSense &bull; Local Private Analysis
              </p>
-             <p className="text-xs text-slate-500 font-medium">Currently optimized for HDFC Bank formats.</p>
+             <p className="text-xs text-slate-500 font-medium">Specifically optimized for HDFC Bank formats.</p>
            </div>
            
            <div className="flex flex-col items-center md:items-end space-y-4">
@@ -425,7 +425,7 @@ function App() {
                 className="flex items-center space-x-2 text-blue-500 hover:text-blue-600 font-bold text-xs bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 transition-all active:scale-95"
               >
                 <Mail size={14} />
-                <span>shrynshgr@gmail.com</span>
+                <span>Contact: shrynshgr@gmail.com</span>
               </a>
            </div>
         </div>
