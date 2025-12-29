@@ -1,11 +1,25 @@
-import React, { useState } from 'react';
-import { FileText, RotateCcw, Loader2, AlertCircle } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { FileText, RotateCcw, AlertCircle, ShieldCheck, List, Users, Key, ExternalLink, Lock, Calendar, Info, Cpu, Zap, Mail } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import StatsOverview from './components/StatsOverview';
 import TransactionTable from './components/TransactionTable';
 import PayeeAnalysis from './components/PayeeAnalysis';
+import AnalysisCharts from './components/AnalysisCharts';
+import ChatPanel from './components/ChatPanel';
 import { analyzeBankStatement, fileToGenerativePart } from './services/geminiService';
 import { AnalysisResult, AnalysisStatus } from './types';
+
+// Extend window type for AI Studio methods
+declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+  interface Window {
+    aistudio?: AIStudio;
+  }
+}
 
 function App() {
   const [status, setStatus] = useState<AnalysisStatus>(AnalysisStatus.IDLE);
@@ -13,41 +27,77 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'transactions' | 'payees'>('transactions');
+  const [loadingMessage, setLoadingMessage] = useState('Initializing Analyst...');
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkKey = async () => {
+      if (window.aistudio) {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(selected);
+      } else {
+        setHasApiKey(!!process.env.API_KEY);
+      }
+    };
+    checkKey();
+  }, []);
+
+  const handleSelectKey = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setHasApiKey(true);
+    }
+  };
+
+  const loadingMessages = [
+    "Optimizing document for AI...",
+    "Scanning table structure...",
+    "Gemini 3 Pro is reasoning over entries...",
+    "Checking math and balances...",
+    "Cleaning up merchant names...",
+    "Finalizing your financial report...",
+  ];
+
+  useEffect(() => {
+    let interval: number;
+    if (status === AnalysisStatus.ANALYZING) {
+      let i = 0;
+      interval = window.setInterval(() => {
+        setLoadingMessage(loadingMessages[i % loadingMessages.length]);
+        i++;
+      }, 3500);
+    }
+    return () => clearInterval(interval);
+  }, [status]);
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file);
     setStatus(AnalysisStatus.ANALYZING);
     setErrorMessage('');
     
-    // Create preview
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
 
     try {
+      setLoadingMessage("Optimizing file...");
       const { data, mimeType } = await fileToGenerativePart(file);
+      
+      setLoadingMessage("Analyzing with Gemini 3 Pro...");
       const analysisResult = await analyzeBankStatement(data, mimeType);
+      
       setResult(analysisResult);
       setStatus(AnalysisStatus.SUCCESS);
     } catch (error: any) {
-      console.error(error);
+      console.error("App Error Handler:", error);
+      const msg = error.message || "";
       
-      let msg = error.message || "Unknown error occurred";
-      
-      // Clean up if it's that specific JSON RPC error string
-      if (typeof msg === 'string' && msg.includes('Rpc failed')) {
-         msg = "Network Timeout: The file took too long to process. Please try a smaller file or better connection.";
-      } else if (msg.includes('{') && msg.includes('error')) {
-         try {
-             const parsed = JSON.parse(msg);
-             if (parsed.error && parsed.error.message) {
-                 msg = parsed.error.message;
-             }
-         } catch (e) {
-             // ignore JSON parse error
-         }
+      if (msg.includes("Requested entity was not found")) {
+        setHasApiKey(false);
+        setErrorMessage("Your API Key is invalid. Please reconnect your AI Studio key.");
+      } else {
+        setErrorMessage(msg || "We encountered an error processing this document.");
       }
-
-      setErrorMessage(msg);
       setStatus(AnalysisStatus.ERROR);
     }
   };
@@ -61,159 +111,271 @@ function App() {
     setPreviewUrl(null);
   };
 
+  if (hasApiKey === false) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-6">
+        <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="bg-blue-600 p-8 text-white text-center relative">
+            <div className="absolute top-4 right-4 opacity-20">
+              <Lock size={80} />
+            </div>
+            <div className="w-20 h-20 bg-white/20 backdrop-blur-md text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <Key size={40} />
+            </div>
+            <h2 className="text-3xl font-black mb-2">Setup Required</h2>
+            <p className="text-blue-100 font-medium">Connect your Gemini API Key to start</p>
+          </div>
+          
+          <div className="p-8 text-center">
+            <p className="text-slate-600 mb-8 leading-relaxed">
+              StatementSense uses the <strong>Gemini 3 Pro</strong> engine to process your data privately. 
+              Paste your API key in the next step to enable high-precision analysis.
+            </p>
+            
+            <div className="space-y-4">
+              <button
+                onClick={handleSelectKey}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-xl shadow-blue-200 flex items-center justify-center space-x-3 group"
+              >
+                <span>Select API Key</span>
+                <Key size={18} className="group-hover:rotate-12 transition-transform" />
+              </button>
+            </div>
+          </div>
+          
+          <div className="bg-slate-50 p-4 text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">
+            Data is processed locally in your session
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={handleReset}>
+            <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-200">
               <FileText className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent">
-              StatementSense
-            </h1>
+            <div>
+              <h1 className="text-xl font-extrabold tracking-tight text-slate-900 leading-none">
+                Statement<span className="text-blue-600">Sense</span>
+              </h1>
+              <div className="flex items-center text-[10px] text-emerald-600 font-bold uppercase tracking-widest mt-0.5">
+                <ShieldCheck size={10} className="mr-1" />
+                <span>Zero Storage Privacy</span>
+              </div>
+            </div>
           </div>
-          {status !== AnalysisStatus.IDLE && (
-            <button
-              onClick={handleReset}
-              className="flex items-center space-x-2 text-sm text-slate-500 hover:text-blue-600 font-medium transition-colors"
-            >
-              <RotateCcw size={16} />
-              <span>Analyze Another</span>
-            </button>
-          )}
+          <div className="flex items-center space-x-4">
+            {status !== AnalysisStatus.IDLE && (
+              <button
+                onClick={handleReset}
+                className="flex items-center space-x-2 text-sm text-slate-500 hover:text-blue-600 font-semibold transition-all px-4 py-2 rounded-lg hover:bg-blue-50"
+              >
+                <RotateCcw size={16} />
+                <span className="hidden sm:inline">Reset</span>
+              </button>
+            )}
+            <div className="flex items-center space-x-2 px-3 py-1.5 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <span>PRO 3.0 ENGINE</span>
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-8">
         
-        {/* State: IDLE - Upload Prompt */}
         {status === AnalysisStatus.IDLE && (
-          <div className="max-w-2xl mx-auto mt-12">
-            <div className="text-center mb-10">
-              <h2 className="text-3xl font-bold text-slate-900 mb-4">
-                Unlock Your Bank Statement Data
+          <div className="max-w-3xl mx-auto mt-12 animate-in fade-in zoom-in duration-500">
+            <div className="text-center mb-12">
+              <div className="flex items-center justify-center space-x-2 mb-4">
+                <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full uppercase tracking-widest flex items-center">
+                  <Cpu size={12} className="mr-1.5" />
+                  Gemini 3 Pro
+                </span>
+                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full uppercase tracking-widest flex items-center">
+                  <Zap size={12} className="mr-1.5" />
+                  Enhanced OCR
+                </span>
+              </div>
+              <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight text-balance">
+                High Precision <br/><span className="text-blue-600">Statement Analysis.</span>
               </h2>
-              <p className="text-lg text-slate-600">
-                Upload a PDF or image of your bank statement to instantly extract transactions, 
-                calculate totals, and group expenses by payee.
+              <p className="text-xl text-slate-600 max-w-xl mx-auto mb-6">
+                Extract every transaction with high accuracy using local, AI-powered document reasoning.
               </p>
+              
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-center space-x-3 text-blue-800 max-w-lg mx-auto mb-8 shadow-sm">
+                <div className="bg-blue-200 p-2 rounded-lg text-blue-700">
+                   <Info size={18} />
+                </div>
+                <p className="text-xs font-semibold text-left">
+                  Optimized for <span className="font-extrabold text-blue-900">Digital Bank Statements</span>. 
+                  <span className="block text-slate-500 font-medium mt-0.5">Works best with high-contrast screenshots or clear digital documents.</span>
+                </p>
+              </div>
             </div>
+            
             <FileUpload onFileSelect={handleFileSelect} />
             
-            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-              <div className="p-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600 font-bold">1</div>
-                <h3 className="font-semibold mb-2">Upload File</h3>
-                <p className="text-sm text-slate-500">Take a photo or upload a PDF scan of your statement.</p>
-              </div>
-              <div className="p-4">
-                <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600 font-bold">2</div>
-                <h3 className="font-semibold mb-2">AI Extraction</h3>
-                <p className="text-sm text-slate-500">Our advanced AI reads texts, dates, names, and amounts accurately.</p>
-              </div>
-              <div className="p-4">
-                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-600 font-bold">3</div>
-                <h3 className="font-semibold mb-2">View & Export</h3>
-                <p className="text-sm text-slate-500">See your spending by payee and export to CSV.</p>
-              </div>
+            <div className="mt-16 pt-8 border-t border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[
+                { title: "Smart Extraction", desc: "Intelligent recognition of dates, narrations, and amounts." },
+                { title: "Safe & Local", desc: "Analysis results are never stored on any server." },
+                { title: "Interactive Chat", desc: "Ask specific questions about your spending after the scan." }
+              ].map((item, i) => (
+                <div key={i} className="space-y-2">
+                  <h3 className="font-bold text-slate-800 flex items-center">
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2"></div>
+                    {item.title}
+                  </h3>
+                  <p className="text-sm text-slate-500 leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* State: ANALYZING - Loading View */}
         {status === AnalysisStatus.ANALYZING && (
-          <div className="flex flex-col items-center justify-center mt-20 space-y-8">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in duration-500">
             <div className="relative">
-              <div className="absolute inset-0 bg-blue-200 rounded-full blur-xl opacity-50 animate-pulse"></div>
-              <div className="relative bg-white p-4 rounded-full shadow-lg border border-slate-100">
-                <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+              <div className="w-24 h-24 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Cpu className="w-10 h-10 text-blue-600 animate-pulse" />
               </div>
             </div>
-            <div className="text-center max-w-md">
-              <h3 className="text-xl font-semibold text-slate-900 mb-2">Analyzing your statement...</h3>
-              <p className="text-slate-500">
-                Please wait while we extract transaction details and identify payees. This usually takes 5-10 seconds.
-              </p>
-            </div>
+            <h3 className="mt-8 text-xl font-bold text-slate-900">Processing Your Data</h3>
+            <p className="mt-2 text-slate-500 font-medium italic max-w-sm">{loadingMessage}</p>
           </div>
         )}
 
-        {/* State: ERROR - Error View */}
         {status === AnalysisStatus.ERROR && (
-          <div className="max-w-md mx-auto mt-20 text-center bg-white p-8 rounded-xl shadow-sm border border-rose-100">
-            <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-8 h-8 text-rose-600" />
+          <div className="max-w-md mx-auto mt-20 p-8 bg-white rounded-2xl border border-rose-100 shadow-xl text-center animate-in slide-in-from-bottom-4 duration-500">
+            <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertCircle className="w-8 h-8 text-rose-500" />
             </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Analysis Failed</h3>
-            <p className="text-slate-500 mb-4">
-              We encountered an issue processing your file:
-            </p>
-            <div className="bg-rose-50 text-rose-700 p-3 rounded-lg text-sm font-medium mb-6 break-words">
-              {errorMessage}
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Analysis Failed</h3>
+            <p className="text-slate-500 mb-4 leading-relaxed">{errorMessage}</p>
+            
+            <div className="mb-8 p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <p className="text-xs text-slate-500 font-medium mb-2">Need help?</p>
+              <a 
+                href="mailto:shrynshgr@gmail.com" 
+                className="flex items-center justify-center space-x-2 text-blue-600 hover:text-blue-700 font-bold text-sm"
+              >
+                <Mail size={14} />
+                <span>shrynshgr@gmail.com</span>
+              </a>
             </div>
-            <p className="text-xs text-slate-400 mb-6">
-              Tip: Ensure the document is clear, has a visible table, and is not password protected. For large PDFs, try splitting them.
-            </p>
-            <button
-              onClick={handleReset}
-              className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium"
-            >
-              Try Again
-            </button>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => selectedFile && handleFileSelect(selectedFile)}
+                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+              >
+                <RotateCcw size={18} />
+                <span>Retry Analysis</span>
+              </button>
+              <button
+                onClick={handleReset}
+                className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+              >
+                Try Different File
+              </button>
+            </div>
           </div>
         )}
 
-        {/* State: SUCCESS - Results View */}
         {status === AnalysisStatus.SUCCESS && result && (
-          <div className="animate-fade-in-up">
-            <div className="flex flex-col lg:flex-row gap-8 items-start">
-              
-              {/* Left Column: Stats, Table, Payee Analysis */}
-              <div className="flex-1 w-full space-y-8">
-                <StatsOverview data={result} />
-                <TransactionTable transactions={result.transactions} />
-                <PayeeAnalysis transactions={result.transactions} />
-              </div>
-
-              {/* Right Column: Source Document Preview (Sticky) */}
-              <div className="lg:w-80 w-full shrink-0">
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 sticky top-24">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center justify-between">
-                    <span>Source Document</span>
-                    <span className="text-xs font-normal text-slate-400">
-                      {selectedFile?.name.length! > 20 ? selectedFile?.name.substring(0, 20) + '...' : selectedFile?.name}
-                    </span>
-                  </h4>
-                  <div className="relative rounded-lg overflow-hidden border border-slate-100 bg-slate-50 aspect-[3/4] group">
-                    {previewUrl && (
-                      selectedFile?.type === 'application/pdf' ? (
-                         <iframe 
-                           src={previewUrl} 
-                           title="Document Preview"
-                           className="w-full h-full"
-                         />
-                      ) : (
-                        <img 
-                          src={previewUrl} 
-                          alt="Statement Preview" 
-                          className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
-                        />
-                      )
-                    )}
-                  </div>
-                  <div className="mt-4 text-xs text-slate-400 text-center">
-                    Review the original document to verify extracted data accuracy.
-                  </div>
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div className="space-y-1">
+                <h2 className="text-2xl font-black text-slate-900">Analysis Summary</h2>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <p className="text-sm text-slate-500 font-medium">Processed {result.summary.transactionCount} transactions.</p>
+                  {(result.summary.startDate || result.summary.endDate) && (
+                    <div className="flex items-center space-x-1.5 text-xs text-blue-600 bg-blue-50 px-3 py-1 rounded-full font-bold">
+                      <Calendar size={12} />
+                      <span>{result.summary.startDate || '?'} — {result.summary.endDate || '?'}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-
+              <div className="flex p-1 bg-slate-200/50 rounded-xl shadow-inner">
+                <button 
+                  onClick={() => setActiveTab('transactions')}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'transactions' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <List size={16} />
+                  <span>Ledger</span>
+                </button>
+                <button 
+                  onClick={() => setActiveTab('payees')}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'payees' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <Users size={16} />
+                  <span>Payees</span>
+                </button>
+              </div>
             </div>
+
+            <StatsOverview data={result} />
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1">
+                <AnalysisCharts data={result} />
+                {previewUrl && (
+                  <div className="mt-8 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Document Source</h4>
+                    <div className="aspect-[3/4] rounded-lg overflow-hidden border border-slate-100 bg-slate-50 relative group">
+                      {selectedFile?.type === 'application/pdf' ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                          <FileText size={48} className="mb-2" />
+                          <span className="text-xs font-medium">PDF View Not Available</span>
+                        </div>
+                      ) : (
+                        <img src={previewUrl} alt="Preview" className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="lg:col-span-2 space-y-8">
+                {activeTab === 'transactions' ? (
+                  <TransactionTable transactions={result.transactions} />
+                ) : (
+                  <PayeeAnalysis transactions={result.transactions} />
+                )}
+              </div>
+            </div>
+
+            <ChatPanel transactions={result.transactions} />
           </div>
         )}
       </main>
+      
+      <footer className="max-w-7xl mx-auto px-6 py-12 border-t border-slate-200 text-center">
+        <div className="space-y-4">
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+            StatementSense &bull; High Precision Financial AI &bull; {new Date().getFullYear()}
+          </p>
+          <div className="flex flex-col items-center space-y-2">
+            <p className="text-[11px] text-slate-500 font-medium">Facing any problems or issues?</p>
+            <a 
+              href="mailto:shrynshgr@gmail.com" 
+              className="flex items-center space-x-2 text-blue-500 hover:text-blue-600 font-bold text-xs bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 transition-colors"
+            >
+              <Mail size={12} />
+              <span>Contact: shrynshgr@gmail.com</span>
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

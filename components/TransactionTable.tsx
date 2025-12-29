@@ -1,20 +1,29 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { Transaction } from '../types';
-import { ArrowDown, ArrowUp, Download } from 'lucide-react';
+import { Download, Search, Filter } from 'lucide-react';
 
 interface TransactionTableProps {
   transactions: Transaction[];
 }
 
 const TransactionTable: React.FC<TransactionTableProps> = ({ transactions }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredTransactions = transactions.filter(t => 
+    t.narration.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
   
   const handleExportCSV = () => {
-    const headers = ["Date", "Narration", "Reference No", "Withdrawal", "Deposit", "Balance"];
+    const headers = ["Date", "Narration", "Category", "Reference No", "Withdrawal", "Deposit", "Balance"];
     const csvContent = [
       headers.join(","),
       ...transactions.map(t => [
         `"${t.date}"`,
         `"${t.narration.replace(/"/g, '""')}"`,
+        `"${t.category}"`,
         `"${t.referenceNo || ''}"`,
         t.withdrawalAmount,
         t.depositAmount,
@@ -32,17 +41,43 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ transactions }) => 
     document.body.removeChild(link);
   };
 
+  const getCategoryStyles = (cat: string) => {
+    const styles: Record<string, string> = {
+      Food: 'bg-orange-50 text-orange-600',
+      Shopping: 'bg-pink-50 text-pink-600',
+      Salary: 'bg-emerald-50 text-emerald-600',
+      Transfer: 'bg-slate-100 text-slate-600',
+      Utilities: 'bg-cyan-50 text-cyan-600',
+      Housing: 'bg-blue-50 text-blue-600',
+    };
+    return styles[cat] || 'bg-slate-100 text-slate-500';
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="flex justify-between items-center p-6 border-b border-slate-100">
-        <h3 className="text-lg font-semibold text-slate-800">Transaction Details</h3>
-        <button
-          onClick={handleExportCSV}
-          className="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
-        >
-          <Download size={16} />
-          <span>Export CSV</span>
-        </button>
+      <div className="p-6 border-b border-slate-100 space-y-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <h3 className="text-lg font-semibold text-slate-800">Transaction History</h3>
+          <div className="flex items-center space-x-2 w-full md:w-auto">
+            <div className="relative flex-1 md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text"
+                placeholder="Search transactions..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center space-x-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Download size={16} />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          </div>
+        </div>
       </div>
       
       <div className="overflow-x-auto">
@@ -50,51 +85,39 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ transactions }) => 
           <thead>
             <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider font-semibold">
               <th className="p-4 border-b border-slate-100">Date</th>
-              <th className="p-4 border-b border-slate-100 w-1/3">Narration</th>
-              <th className="p-4 border-b border-slate-100 text-right text-rose-600">Withdrawal</th>
-              <th className="p-4 border-b border-slate-100 text-right text-emerald-600">Deposit</th>
-              <th className="p-4 border-b border-slate-100 text-right">Balance</th>
+              <th className="p-4 border-b border-slate-100">Details</th>
+              <th className="p-4 border-b border-slate-100">Category</th>
+              <th className="p-4 border-b border-slate-100 text-right">Withdrawal</th>
+              <th className="p-4 border-b border-slate-100 text-right">Deposit</th>
             </tr>
           </thead>
           <tbody className="text-sm text-slate-700 divide-y divide-slate-50">
-            {transactions.map((t, idx) => (
+            {filteredTransactions.map((t, idx) => (
               <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                <td className="p-4 whitespace-nowrap font-medium text-slate-600">{t.date}</td>
+                <td className="p-4 whitespace-nowrap font-medium text-slate-500">{t.date}</td>
                 <td className="p-4">
                   <div className="flex flex-col">
-                    <span className="font-medium text-slate-800">{t.narration}</span>
-                    {t.referenceNo && (
-                      <span className="text-xs text-slate-400 mt-1">Ref: {t.referenceNo}</span>
-                    )}
+                    <span className="font-semibold text-slate-800">{t.name || t.narration.substring(0, 30)}</span>
+                    <span className="text-[10px] text-slate-400 truncate max-w-[200px]">{t.narration}</span>
                   </div>
                 </td>
-                <td className="p-4 text-right font-mono">
-                  {t.withdrawalAmount > 0 ? (
-                    <span className="text-rose-600 bg-rose-50 px-2 py-1 rounded">
-                      -{t.withdrawalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                  ) : (
-                    <span className="text-slate-300">-</span>
-                  )}
+                <td className="p-4">
+                  <span className={`text-[10px] font-bold uppercase tracking-tighter px-2 py-1 rounded-full ${getCategoryStyles(t.category)}`}>
+                    {t.category}
+                  </span>
                 </td>
-                <td className="p-4 text-right font-mono">
-                  {t.depositAmount > 0 ? (
-                    <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
-                      +{t.depositAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                  ) : (
-                    <span className="text-slate-300">-</span>
-                  )}
+                <td className="p-4 text-right font-mono text-rose-600 font-medium">
+                  {t.withdrawalAmount > 0 ? `₹${t.withdrawalAmount.toLocaleString()}` : '-'}
                 </td>
-                <td className="p-4 text-right font-mono font-medium text-slate-900">
-                  {t.closingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <td className="p-4 text-right font-mono text-emerald-600 font-medium">
+                  {t.depositAmount > 0 ? `₹${t.depositAmount.toLocaleString()}` : '-'}
                 </td>
               </tr>
             ))}
-            {transactions.length === 0 && (
+            {filteredTransactions.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-slate-400">
-                  No transactions found.
+                <td colSpan={5} className="p-12 text-center text-slate-400 italic">
+                  No matching transactions found.
                 </td>
               </tr>
             )}

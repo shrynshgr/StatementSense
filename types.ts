@@ -1,7 +1,9 @@
+
 export interface Transaction {
   date: string;
   narration: string;
   name?: string;
+  category: string;
   referenceNo?: string;
   valueDate?: string;
   withdrawalAmount: number;
@@ -16,6 +18,9 @@ export interface AnalysisResult {
     totalWithdrawals: number;
     netMovement: number;
     transactionCount: number;
+    startDate?: string;
+    endDate?: string;
+    categories: Record<string, number>;
   };
 }
 
@@ -24,4 +29,9 @@ export enum AnalysisStatus {
   ANALYZING = 'ANALYZING',
   SUCCESS = 'SUCCESS',
   ERROR = 'ERROR'
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
 }
